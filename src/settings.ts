@@ -11,6 +11,9 @@ export interface PomoSettings {
 	longBreakInterval: number;
 	autostartTimer: boolean;
 	numAutoCycles: number;
+	// @DONE add flowtime options here
+	flowSteps: [number, number][]; // note that the first step must always start at zero if the minute value (index 0) is meant to indicate anything above that number of minutes
+	flowStepAddTemp: number;
 	ribbonIcon: boolean;
 	emoji: boolean;
 	notificationSound: boolean;
@@ -32,6 +35,8 @@ export const DEFAULT_SETTINGS: PomoSettings = {
 	longBreakInterval: 4,
 	autostartTimer: true,
 	numAutoCycles: 0,
+	flowSteps: [[0, 5]],
+	flowStepAddTemp: 0,
 	ribbonIcon: true,
 	emoji: true,
 	notificationSound: true,
@@ -46,6 +51,9 @@ export const DEFAULT_SETTINGS: PomoSettings = {
 	whiteNoise: false,
 }
 
+// @DONE some constants for more legible access to the flowSteps array of pairs
+export const FS_TIME: number = 0
+export const FS_BREAK: number = 1
 
 export class PomoSettingTab extends PluginSettingTab {
 	plugin: PomoTimerPlugin;
@@ -127,6 +135,54 @@ export class PomoSettingTab extends PluginSettingTab {
 					}));
 		}
 
+		// @DONE flowtime break brackets settings here
+		new Setting(containerEl)
+		.setName("Add Flowtime step")
+		.setDesc("Add a new flowtime step. The time is relative to the start of the pomodoro not the end. When toggled (temporarily or permanently), pomodoros convert from timers into stopwatches with variable endtimes. Requires plugin reload to apply")
+		.addText(text => text
+			.setPlaceholder(`>${this.plugin.settings.pomo} minutes`)
+			.onChange(value => {
+				this.plugin.settings.flowStepAddTemp = setNumericValue(value, DEFAULT_SETTINGS.flowStepAddTemp, this.plugin.settings.flowStepAddTemp);
+				this.plugin.saveSettings();
+			}))
+		.addButton(button => button
+			.setIcon("plus")
+			.onClick(() => {
+				// check if the flowSteps array already contains this timestep and ignore
+				if (this.plugin.settings.flowSteps.some(pair => pair[FS_TIME] == this.plugin.settings.flowStepAddTemp))
+					return;
+				// if not already in array, then create new pair, push to array and resort
+				let newPair: [number, number] = [this.plugin.settings.flowStepAddTemp, DEFAULT_SETTINGS.flowSteps[0][FS_BREAK]];
+				this.plugin.settings.flowSteps.push(newPair);
+				this.plugin.settings.flowSteps.sort((a, b) => a[FS_TIME] - b[FS_TIME]);
+				this.plugin.settings.flowStepAddTemp = DEFAULT_SETTINGS.flowStepAddTemp;
+				this.plugin.saveSettings();
+				this.display();
+			}));
+
+		for (let i = 0; i < this.plugin.settings.flowSteps.length; i++) {
+			new Setting(containerEl)
+			.setName(`${this.plugin.settings.flowSteps[i][FS_TIME]} min`)
+			.addText(text => text
+				.setValue(this.plugin.settings.flowSteps[i][FS_BREAK].toString())
+				.onChange(value => {
+					this.plugin.settings.flowSteps[i][FS_BREAK] = setNumericValue(value, DEFAULT_SETTINGS.flowSteps[0][FS_BREAK], this.plugin.settings.flowSteps[i][FS_BREAK]);
+					this.plugin.saveSettings();
+				}))
+			.addButton(button => button
+				.setIcon("minus")
+				.onClick(() => {
+					// sleek way of making sure the first element is always 0min and never removed
+					if (i == 0)
+						return;
+					const stepsBefore = this.plugin.settings.flowSteps.slice(0, i);
+					const stepsAfter = this.plugin.settings.flowSteps.slice(i+1);
+					this.plugin.settings.flowSteps = stepsBefore.concat(stepsAfter);
+					this.plugin.saveSettings();
+					this.display();
+				}));
+
+		}
 
 		/************** Appearance ************************/
 
@@ -143,7 +199,7 @@ export class PomoSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 		.setName("Timer emoji")
-		.setDesc("Toggle 🏖️/🍅 emoji that indicate whether a timer is a pomodoro or a break.")
+		.setDesc("Toggle 🏖️/🍅/🥋 emoji that indicate whether a timer is a pomodoro, a flowtime or a break.")
 		.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.emoji)
 				.onChange(value => {
@@ -200,7 +256,7 @@ export class PomoSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Logging")
-			.setDesc("Enable a log of completed pomodoros")
+			.setDesc("Enable a log of completed pomodoros. The special placeholders $1, $2, $3 can be used to insert the session duration (minutes), mode emoji and mode text respectively. Moment JS formats are accepted for log time.")
 			.addToggle(toggle => toggle
 					.setValue(this.plugin.settings.logging)
 					.onChange(value => {

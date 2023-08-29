@@ -37,14 +37,18 @@ export default class PomoTimerPlugin extends Plugin {
 			this.statusBar.setText(await this.timer.setStatusBarText()), 500));
 
 		this.addCommand({
-			id: 'start-satusbar-pomo',
-			name: 'Start pomodoro',
+			id: 'start-satusbar-pomoflow',
+			name: 'Start pomodoro-flowtime',
 			icon: 'play',
 			checkCallback: (checking: boolean) => {
 				let leaf = this.app.workspace.activeLeaf;
 				if (leaf) {
 					if (!checking) {
-						this.timer.startTimer(Mode.Pomo);
+						if (this.timer.constFlow) {
+							this.timer.startTimer(Mode.Flow);
+						} else {
+							this.timer.startTimer(Mode.Pomo);
+						}
 					}
 					return true;
 				}
@@ -53,7 +57,7 @@ export default class PomoTimerPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'pause-satusbar-pomo',
+			id: 'pause-satusbar-pomoflow',
 			name: 'Toggle timer pause',
 			icon: 'pause',
 			checkCallback: (checking: boolean) => {
@@ -69,7 +73,7 @@ export default class PomoTimerPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'quit-satusbar-pomo',
+			id: 'quit-satusbar-pomoflow',
 			name: 'Quit timer',
 			icon: 'quit',
 			checkCallback: (checking: boolean) => {
@@ -77,6 +81,55 @@ export default class PomoTimerPlugin extends Plugin {
 				if (leaf && this.timer.mode !== Mode.NoTimer) {
 					if (!checking) {
 						this.timer.quitTimer();
+					}
+					return true;
+				}
+				return false;
+			}
+		});
+
+		// @DONE flowtime mode and session management commands
+		this.addCommand({
+			id: 'toggle-statusbar-pomoflow',
+			name: 'Toggle flowtime',
+			icon: '',
+			checkCallback: (checking: boolean) => {
+				let leaf = this.app.workspace.activeLeaf;
+				if (leaf) {
+					if (!checking) {
+						this.timer.toggleFlowtime(false);
+					}
+					return true;
+				}
+				return false;
+			}
+		});
+
+		this.addCommand({
+			id: 'begin-flow-statusbar-pomoflow',
+			name: 'Go into flowtime (single stopwatch session)',
+			icon: '',
+			checkCallback: (checking: boolean) => {
+				let leaf = this.app.workspace.activeLeaf;
+				if (leaf && this.timer.mode === Mode.Pomo) {
+					if (!checking) {
+						this.timer.toggleFlowtime(true);
+					}
+					return true;
+				}
+				return false;
+			}
+		});
+
+		this.addCommand({
+			id: 'end-flow-statusbar-pomoflow',
+			name: 'End flowtime stopwatch',
+			icon: '',
+			checkCallback: (checking: boolean) => {
+				let leaf = this.app.workspace.activeLeaf;
+				if (leaf && this.timer.mode === Mode.Flow) {
+					if (!checking) {
+						this.timer.endFlowtime();
 					}
 					return true;
 				}

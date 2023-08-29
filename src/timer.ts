@@ -2,7 +2,7 @@ import { Notice, moment, TFolder, TFile } from 'obsidian';
 import { getDailyNote, createDailyNote, getAllDailyNotes } from 'obsidian-daily-notes-interface';
 import { notificationUrl, whiteNoiseUrl } from './audio_urls';
 import { WhiteNoise } from './white_noise';
-import { PomoSettings } from './settings';
+import { FS_BREAK, FS_TIME, PomoSettings } from './settings';
 import PomoTimerPlugin from './main';
 
 const electron = require("electron");
@@ -11,6 +11,8 @@ const MILLISECS_IN_MINUTE = 60 * 1000;
 
 export const enum Mode {
 	Pomo,
+	// @DONE add mode for flowtime extension
+	Flow,
 	ShortBreak,
 	LongBreak,
 	NoTimer
@@ -20,9 +22,15 @@ export const enum Mode {
 export class Timer {
 	plugin: PomoTimerPlugin;
 	settings: PomoSettings;
+	originTime: moment.Moment; /*the first start time set for the currently running timer*/
 	startTime: moment.Moment; /*when currently running timer started*/
 	endTime: moment.Moment;   /*when currently running timer will end if not paused*/
 	mode: Mode;
+	// @DONE add the flowtime toggle state data variables here
+	constFlow: boolean;  /*start pomodoros as flowtimes instead*/
+	endFlow: boolean;  /*flag to end the flowtime stopwatch*/
+	flowBreak: number; /*duration of the next short break in milliseconds*/
+	totalTime: number;  /*total time running from first start of pomo/flow set */
 	pausedTime: number;  /*time left on paused timer, in milliseconds*/
 	paused: boolean;
 	autoPaused: boolean;
@@ -35,6 +43,8 @@ export class Timer {
 		this.plugin = plugin;
 		this.settings = plugin.settings;
 		this.mode = Mode.NoTimer;
+		this.constFlow = false;
+		this.endFlow = false;
 		this.paused = false;
 		this.pomosSinceStart = 0;
 		this.cyclesSinceLastAutoStop = 0;
@@ -61,23 +71,41 @@ export class Timer {
 				timer_type_symbol = "🏖️ ";
 				if (this.mode === Mode.Pomo) {
 					timer_type_symbol = "🍅 ";
+				} else if (this.mode === Mode.Flow) {
+					// @DONE add flowtime emoji symbol
+					timer_type_symbol = "🥋 "
 				}
 			}
 
-			if (this.paused === true) {
-				return timer_type_symbol + millisecsToString(this.pausedTime); //just show the paused time
-			} else if (moment().isSameOrAfter(this.endTime)) {
-				await this.handleTimerEnd();
+			if (this.mode !== Mode.Flow) {
+				if (this.paused === true) {
+					return timer_type_symbol + millisecsToString(this.pausedTime); //just show the paused time
+				} else if (moment().isSameOrAfter(this.endTime)) {
+					await this.handleTimerEnd();
+				} else {
+					return timer_type_symbol + millisecsToString(this.getCountdown()); //return display value
+				}
+			} else {
+				// @DONE show stopwatch if in the middle of a flowtime
+				if (this.paused === true) {
+					return timer_type_symbol + millisecsToString(this.totalTime); //just show the paused time
+				} else if (this.endFlow) {
+					this.endFlow = false;
+					await this.handleTimerEnd();
+				} else {
+					return timer_type_symbol + millisecsToString(this.getStopwatch()); //return display value
+				}
 			}
-
-			return timer_type_symbol + millisecsToString(this.getCountdown()); //return display value
+			return "💎";
+			
 		} else {
 			return ""; //fixes TypeError: failed to execute 'appendChild' on 'Node https://github.com/kzhovn/statusbar-pomo-obsidian/issues/4
 		}
 	}
 
 	async handleTimerEnd() {
-		if (this.mode === Mode.Pomo) { //completed another pomo
+		// @DONE account for case where flowtime ends
+		if (this.mode === Mode.Pomo || this.mode === Mode.Flow) { //completed another pomo
 			this.pomosSinceStart += 1;
 
 			if (this.settings.logging === true) {
@@ -92,7 +120,7 @@ export class Timer {
 			playNotification();
 		}
 		if (this.settings.useSystemNotification === true) { //show system notification end of timer
-			showSystemNotification(this.mode, this.settings.emoji);
+			showSystemNotification(this.mode, this.settings.emoji); // @WARN this causes nonstop pinging and breaks timer in linux flatpak
 		}
 
 		if (this.settings.autostartTimer === false && this.settings.numAutoCycles <= this.cyclesSinceLastAutoStop) { //if autostart disabled, pause and allow user to start manually
@@ -116,13 +144,43 @@ export class Timer {
 		if (this.settings.whiteNoise === true) {
 			this.whiteNoisePlayer.stopWhiteNoise();
 		}
+		if (this.settings.logging === true) {
+			await this.logPomo();
+		}
 
 		await this.plugin.loadSettings(); //why am I loading settings on quit? to ensure that when I restart everything is correct? seems weird
+	}
+
+	toggleFlowtime(isTemp: boolean) {
+		if (isTemp && this.mode === Mode.Pomo) {
+			// convert this session to flowtime
+			this.mode = Mode.Flow;
+		} else {
+			// turn all pomos into flows
+			if (this.constFlow) {
+				this.constFlow = false;
+			} else {
+				this.constFlow = true;
+				if (this.mode === Mode.Pomo)
+					this.mode = Mode.Flow;
+			}
+		}
+	}
+
+	endFlowtime() {
+		if (this.mode === Mode.Flow) {
+			const totalMinutes = this.getStopwatch() / MILLISECS_IN_MINUTE;
+			const breakIndex = this.settings.flowSteps.findLastIndex(e => e[FS_TIME] < totalMinutes);
+			this.flowBreak = this.settings.flowSteps[breakIndex][FS_BREAK];
+			this.endFlow = true;
+			this.modeEndingNotification();
+		}
 	}
 
 	pauseTimer(): void {
 		this.paused = true;
 		this.pausedTime = this.getCountdown();
+		this.totalTime = this.getStopwatch();
 
 		if (this.settings.whiteNoise === true) {
 			this.whiteNoisePlayer.stopWhiteNoise();
@@ -170,20 +228,28 @@ export class Timer {
 
 	private setupTimer(mode: Mode = null) {
 		if (mode === null) { //no arg -> start next mode in cycle
-			if (this.mode === Mode.Pomo) {
+			if (this.mode === Mode.Pomo || this.mode === Mode.Flow) {
 				if (this.pomosSinceStart % this.settings.longBreakInterval === 0) {
 					this.mode = Mode.LongBreak;
 				} else {
 					this.mode = Mode.ShortBreak;
 				}
 			} else { //short break, long break, or no timer
-				this.mode = Mode.Pomo;
+				if (this.constFlow) {
+					// @DONE transition state to flowtime if constant flowtime is toggled on
+					this.mode = Mode.Flow;
+				} else {
+					this.mode = Mode.Pomo;
+				}
 			}
 		} else { //starting a specific mode passed to func
 			this.mode = mode;
 		}
-
-		this.setStartAndEndTime(this.getTotalModeMillisecs());
+		
+		this.setStartAndEndTime(this.getTotalModeMillisecs(this.flowBreak));
+		this.originTime = moment();
+		this.totalTime = 0;
+		this.flowBreak = 0;
 	}
 
 	setStartAndEndTime(millisecsLeft: number): void {
@@ -197,13 +263,27 @@ export class Timer {
 		return endTimeClone.diff(moment());
 	}
 
-	getTotalModeMillisecs(): number {
+	/*Return milliseconds from start of timer*/
+	getStopwatch(): number {
+		let startTimeClone = this.startTime.clone();
+		return moment().diff(startTimeClone) + this.totalTime;
+	}
+
+	getTotalModeMillisecs(customBreak: number = 0): number {
 		switch (this.mode) {
 			case Mode.Pomo: {
 				return this.settings.pomo * MILLISECS_IN_MINUTE;
 			}
+			case Mode.Flow: {
+				return 0;
+			}
 			case Mode.ShortBreak: {
-				return this.settings.shortBreak * MILLISECS_IN_MINUTE;
+				// @DONE set time for short break if varying due to flowtime
+				if (customBreak > 0) {
+					return customBreak * MILLISECS_IN_MINUTE;
+				} else {
+					return this.settings.shortBreak * MILLISECS_IN_MINUTE;
+				}
 			}
 			case Mode.LongBreak: {
 				return this.settings.longBreak * MILLISECS_IN_MINUTE;
@@ -235,6 +315,10 @@ export class Timer {
 				new Notice(`Starting ${time} ${unit} pomodoro.`);
 				break;
 			}
+			case (Mode.Flow): {
+				new Notice(`Starting flow at ${this.totalTime / MILLISECS_IN_MINUTE} ${unit}`);
+				break;
+			}
 			case (Mode.ShortBreak):
 			case (Mode.LongBreak): {
 				new Notice(`Starting ${time} ${unit} break.`);
@@ -249,8 +333,9 @@ export class Timer {
 
 	modeRestartingNotification(): void {
 		switch (this.mode) {
-			case (Mode.Pomo): {
-				new Notice(`Restarting pomodoro.`);
+			case (Mode.Pomo):
+			case (Mode.Flow): {
+				new Notice(`Restarting pomodoro-flowtime.`);
 				break;
 			}
 			case (Mode.ShortBreak):
@@ -262,10 +347,35 @@ export class Timer {
 	}
 
 
+	// @DONE new notification type for stopping flowtime session
+	modeEndingNotification(): void {
+		switch (this.mode) {
+			case (Mode.Flow): {
+				new Notice("Ending flowtime.");
+				break;
+			}
+		}
+	}
 
 	/**************  Logging  **************/
 	async logPomo(): Promise<void> {
 		var logText = moment().format(this.settings.logText);
+
+		// @DONE replace placeholders with appropriate string, duration or emoji
+		var logEmoji = "🏖️";
+		var logType = "break"
+		if (this.mode === Mode.Pomo) {
+			logEmoji = "🍅";
+			logType = "pomodoro";
+		} else if (this.mode === Mode.Flow) {
+			logEmoji = "🥋";
+			logType = "flowtime";
+		}
+		var logDur = Math.floor(moment().diff(this.originTime, 'minutes'));
+		logText = logText.replace('$1', logDur.toString());
+		logText = logText.replace('$2', logEmoji);
+		logText = logText.replace('$3', logType);
+		
 		const logFilePlaceholder = "{{logFile}}";
 
 		if (this.settings.logActiveNote === true) {
@@ -329,18 +439,20 @@ function playNotification(): void {
 	audio.play();
 }
 
+// @DONE add notification for flowtime case
 function showSystemNotification(mode:Mode, useEmoji:boolean): void {
 	let text = "";
 	switch (mode) {
+		case (Mode.Flow):
 		case (Mode.Pomo): {
 			let emoji = useEmoji ? "🏖" : ""
-			text = `End of the pomodoro, time to take a break ${emoji}`;
+			text = `End of the pomodoro-flowtime, time to take a break ${emoji}`;
 			break;
 		}
 		case (Mode.ShortBreak):
 		case (Mode.LongBreak): {
-			let emoji = useEmoji ? "🍅" : ""
-			text = `End of the break, time for the next pomodoro ${emoji}`;
+			let emoji = useEmoji ? this.constFlow ? "🥋" : "🍅" : ""
+			text = `End of the break, time for the next pomodoro-flowtime ${emoji}`;
 			break;
 		}
 		case (Mode.NoTimer): {
