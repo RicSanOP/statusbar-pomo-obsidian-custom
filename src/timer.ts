@@ -135,17 +135,19 @@ export class Timer {
 	}
 
 	async quitTimer(): Promise<void> {
+		if (this.settings.logging === true) {
+			await this.logPomo();
+		}
+		
 		this.mode = Mode.NoTimer;
 		this.startTime = moment(0);
 		this.endTime = moment(0);
+		this.totalTime = 0;
 		this.paused = false;
 		this.pomosSinceStart = 0;
 
 		if (this.settings.whiteNoise === true) {
 			this.whiteNoisePlayer.stopWhiteNoise();
-		}
-		if (this.settings.logging === true) {
-			await this.logPomo();
 		}
 
 		await this.plugin.loadSettings(); //why am I loading settings on quit? to ensure that when I restart everything is correct? seems weird

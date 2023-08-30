@@ -256,7 +256,7 @@ export class PomoSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Logging")
-			.setDesc("Enable a log of completed pomodoros. The special placeholders $1, $2, $3 can be used to insert the session duration (minutes), mode emoji and mode text respectively. Moment JS formats are accepted for log time.")
+			.setDesc("Enable a log of completed pomodoros and flowtimes.")
 			.addToggle(toggle => toggle
 					.setValue(this.plugin.settings.logging)
 					.onChange(value => {
@@ -304,7 +304,7 @@ export class PomoSettingTab extends PluginSettingTab {
 
 			new Setting(containerEl)
 				.setName("Timestamp Format")
-				.setDesc("Specify format for the logtext using moment syntax")
+				.setDesc("Specify format for the logtext using moment syntax. The special placeholders $1, $2, $3 can be used to insert the session duration (minutes), mode emoji and mode text respectively. Square brackets can be used to escape substrings from moment.js formatting.")
 				.addMomentFormat(text => text
 					.setDefaultFormat(this.plugin.settings.logText)
 					.setValue(this.plugin.settings.logText)
