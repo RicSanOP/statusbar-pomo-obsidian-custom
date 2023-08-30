@@ -155,6 +155,7 @@ export class Timer {
 		if (isTemp && this.mode === Mode.Pomo) {
 			// convert this session to flowtime
 			this.mode = Mode.Flow;
+			new Notice("Going into flow");
 		} else {
 			// turn all pomos into flows
 			if (this.constFlow) {
@@ -164,6 +165,7 @@ export class Timer {
 				if (this.mode === Mode.Pomo)
 					this.mode = Mode.Flow;
 			}
+			this.modeTogglingNotification();
 		}
 	}
 
@@ -347,7 +349,15 @@ export class Timer {
 	}
 
 
-	// @DONE new notification type for stopping flowtime session
+	// @DONE new notification type for toggling and stopping flowtime session
+	modeTogglingNotification(): void {
+		if (this.constFlow) {
+			new Notice("Current mode: Flowtime");
+		} else {
+			new Notice("Current mode: Pomodoro")
+		}
+	}
+	
 	modeEndingNotification(): void {
 		switch (this.mode) {
 			case (Mode.Flow): {

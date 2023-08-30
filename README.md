@@ -1,8 +1,21 @@
-# Status Bar Pomo Timer for Obsidian
+# Status Bar Pomo-Flow Timer for Obsidian
 
 Plugin that displays a [pomodoro timer](https://en.wikipedia.org/wiki/Pomodoro_Technique) in the [Obsidian](https://obsidian.md/) status bar. 
 
 ![timer screenshot](timer_screenshot.png)
+
+## New Feature: Flowtime
+
+Flowtime can be viewed as the polar opposite to the Pomodoro technique. It allows for variable work sessions with break lengths based on the length of the session (read more here https://zapier.com/blog/flowtime-technique/). This custom version of the `statusbar-pomo-obsidian` plugin is accompanied with a flowtime system that works in conjunction with pomodoros.
+
+In order to make use of the system, you must first set your flow steps in the plugin's settings. The flow steps pretty much are used to determine how long you can rest based on the length of your prior flowtime session, which uses a stopwatch instead of a countdown timer.
+
+The plugin comes with 3 new commands to operate the flowtime system:
+- Toggle flowtime: this command permanently switches between pomodoro and flowtime mode. If turned on mid pomodoro, the pomodoro will switch into a flowtime and the statusbar countdown timer will switch into a stopwatch. Subsequent work sessions will start as flowtimes.
+- Go into flowtime: this command is only available during a pomodoro countdown and is used to convert that single pomodoro into a flowtime. When used, the pomodoro countdown timer will switch into a stopwatch until the session is ended. Subsequent sessions will revert to pomodoros.
+- End flowtime stopwatch: this command is only avaible during a flowtime and is used to end the current session and proceed to the next break. Note that it will invoke a logging call if the feature is enabled.
+
+To account for these new changes, the logging feature now includes placeholders $1, $2, $3 which are replaced with the number of minutes in the session, the emoji of the mode and the type (pomodoro/flowtime) of the mode respecttively. You can configure this in the settings.
 
 ## Use
 Click the clock icon in the left ribbon panel to start. Click again to toggle pause.
