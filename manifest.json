@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-pomo-flow-timer",
 	"name": "Status Bar Pomodoro Flowtime Timer (Custom)",
-	"version": "0.1.16",
+	"version": "0.1.17",
 	"minAppVersion": "0.9.12",
 	"description": "Adds a pomodoro-flowtime timer to your status bar.",
 	"author": "RicSanOP",
