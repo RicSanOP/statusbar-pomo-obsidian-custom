@@ -1,7 +1,7 @@
 {
   "name": "obsidian-statusbar-pomo",
-  "version": "0.1.17",
-  "description": "Adds a pomodoro timer to your status bar",
+  "version": "0.2.2",
+  "description": "Adds a pomodoro flowtime timer to your status bar with logging capabilities",
   "main": "main.js",
   "scripts": {
     "dev": "rollup --config rollup.config.js -w",
