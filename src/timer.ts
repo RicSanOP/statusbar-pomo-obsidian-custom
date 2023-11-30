@@ -290,7 +290,12 @@ export class Timer {
 				}
 			}
 			case Mode.LongBreak: {
-				return this.settings.longBreak * MILLISECS_IN_MINUTE;
+				// @DONE set time for long break if varying due to flowtime
+				if (this.settings.longBreak < customBreak) {
+					return customBreak * MILLISECS_IN_MINUTE;
+				} else {
+					return this.settings.longBreak * MILLISECS_IN_MINUTE;
+				}
 			}
 			case Mode.NoTimer: {
 				throw new Error("Mode NoTimer does not have an associated time value");
