@@ -157,6 +157,7 @@ export class Timer {
 		if (isTemp && this.mode === Mode.Pomo) {
 			// convert this session to flowtime
 			this.mode = Mode.Flow;
+			this.constFlow = false;
 			new Notice("Going into flow");
 		} else {
 			// turn all pomos into flows
@@ -291,7 +292,7 @@ export class Timer {
 			}
 			case Mode.LongBreak: {
 				// @DONE set time for long break if varying due to flowtime
-				if (this.settings.longBreak < customBreak) {
+				if (customBreak > 0) {
 					return customBreak * MILLISECS_IN_MINUTE;
 				} else {
 					return this.settings.longBreak * MILLISECS_IN_MINUTE;
