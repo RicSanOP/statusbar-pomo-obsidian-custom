@@ -1,6 +1,6 @@
 {
   "name": "obsidian-statusbar-pomo",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Adds a pomodoro flowtime timer to your status bar with logging capabilities",
   "main": "main.js",
   "scripts": {
